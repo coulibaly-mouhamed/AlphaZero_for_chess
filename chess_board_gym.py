@@ -58,7 +58,7 @@ class game():
                 print(self.env.render(mode='unicode'))
                 break
             
-        return self.env #,self.board, reward, done, info
+        return self.env,self.board #,self.board, reward, done, info
     
 if __name__ == '__main__':
     env = gym.make('Chess-v0')
