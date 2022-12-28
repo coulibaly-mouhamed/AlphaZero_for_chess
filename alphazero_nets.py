@@ -134,6 +134,7 @@ class Alphazero_net(nn.Module):
         torch.manual_cpu(cpu)
         cuda = torch.cuda.is_available()
         
+        
         self.optimizer.zero_grad()
         loss_batch = 0
         
