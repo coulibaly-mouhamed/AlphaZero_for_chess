@@ -14,8 +14,14 @@ def choose_action(pi,env):
             -id_action: the id of the chosen action
     '''
     id_action = 5000
+    try_ = 0
+    #convert pi to numpy array
+    pi_np = pi.detach().numpy()
     while (id_action not in env.legal_actions):
-        id_action = np.random.choice(len(pi),p=pi)
+    
+        id_action = np.random.choice(len(pi),p=pi_np)
+        try_ += 1
+    print('Find action after ',try_,' tries')
     return id_action
 
 
@@ -45,18 +51,33 @@ def play_mcts_guided_game(neural_network,n_simu):
     #Initialisation of the root node
     player_turn = 1
     root = Node(env,board,neural_network,1,1)
+    play =1
+    history_action_back_to_root = []
     while (not done):
+        print("play = ",play)
         #Run MCTS
-        root_final,pi = MCTS(root,n_simu)
+        pi = MCTS(root,n_simu,history_action_back_to_root)
         pi_history.append(pi)
         #Select the action
+        '''
+        if  (pi.sum() != 1):
+            print("pi.sum() = ",pi.sum())
+            print('Problem with pi')
+            #Print pi 
+            break
+        '''
         id_action = choose_action(pi,env)
         #Update the environnement and play the action
         new_state, reward, done, info = env.step(id_action)
+        history_action_back_to_root.append(id_action)
         player_turn *= -1
         root = Node(env,new_state,neural_network,player_turn,1)
         #Save the state and the probability vector
         state_history.append(new_state)
+        play += 1
+        print(env.render(mode='unicode'))
+        print('___________________________________________________________________')
+        
     return state_history,pi_history,-reward*player_turn
         
 if __name__ == '__main__':

@@ -8,13 +8,14 @@ import torch
 from chess_board_gym import *
 import copy 
 import numpy as np 
+import multiprocessing as mp
 
 
 
 
 class Node:
     
-    def __init__(self,env,state,alphazero_network,player_turn=1,prior_probability=1):
+    def __init__(self,env,state,alphazero_network,player_turn=1,prior_probability=1,action_past=None):
         '''
         Node class that describes a node in the MCTS tree. It contains:
             -env: the gym environment of the game
@@ -45,12 +46,35 @@ class Node:
         self.visit_count = 0
         self.tot_action_value = 0
         self.mean_action_value = 0
-        self.actions_list = env.legal_actions
+        #self.actions_list = self.env.legal_actions
         self.neural_network = alphazero_network
         self.cput = 1
-        self.parent = None
         self.is_leaf = True
+        self.action_past = action_past #Action that has been taken to reach the node
+        self.action_tracker = []
     
+    def create_children(self,id_action,prior_probability_child):
+        
+        child_env = gym.make('Chess-v0')
+        child_env = BoardEncoding(child_env,history_length=1)
+        child_env = MoveEncoding(child_env)
+        child_env.reset()
+        
+        if len(self.action_tracker) != 0 :
+            for act_past in self.action_tracker:
+                #Update the new environment with the history of actions
+                child_env.step(act_past)
+       
+        state_child, reward, done, info = child_env.step(self.env.legal_actions[id_action])
+        
+        #Convert prior_probability_child to a numpy array
+        self.children[id_action] = Node(child_env,state_child,self.neural_network,-self.player_turn,prior_probability_child[self.env.legal_actions[id_action]],self.env.legal_actions[id_action])
+        
+        #Add the parent node to the child node
+        self.children[id_action].action_tracker = copy.deepcopy(self.action_tracker)
+        self.children[id_action].action_tracker.append(self.env.legal_actions[id_action])
+        
+        return 
     
     def expand(self):
         '''
@@ -60,15 +84,25 @@ class Node:
         #Compute the prior probability of the children nodes
         prior_probability_child = self.neural_network.forward(self.state)[0]
         prior_probability_child = prior_probability_child.flatten().detach().numpy()
-        for id_action in range(len(self.actions_list)):
-            child_env = copy.deepcopy(self.env)
-            state_child, reward, done, info = child_env.step(self.actions_list[id_action])
-            #Convert prior_probability_child to a numpy array
-            self.children[id_action] = Node(child_env,state_child,self.neural_network,-self.player_turn,prior_probability_child[self.actions_list[id_action]])
-            #Add the parent node to the child node
-            self.children[id_action].parent = self
+       
+        '''
+        id_actions =[i for i in range(len(self.env.legal_actions))]
+        try:
+            with mp.Pool(2) as pool:
+                childrens = pool.map(self.create_children,id_actions)
+            self.children = {i:childrens[i] for i in range(len(self.env.legal_actions))}
+        
+        except:
+        '''
+        
+        for id_action in range(len(self.env.legal_actions)):
+            self.create_children(id_action,prior_probability_child)
+            
         self.is_leaf = False
+        
         return
+    
+    
 
     def select_child(self):
         '''
@@ -78,7 +112,7 @@ class Node:
         
         best_score = float('-inf')
         best_action = None
-        for id_action in range(len(self.actions_list)):
+        for id_action in range(len(self.env.legal_actions)):
             score = self.ucb_score(id_action)
             if score > best_score:
                 best_score = score
@@ -86,15 +120,14 @@ class Node:
         return self.children[best_action]
         
         
-   
-    
+
     def ucb_score(self,id_action):
         '''
          Compute the UCB score for the node
         '''
         U_s_a = self.cput*self.prior_probability*np.sqrt(self.visit_count)/(1+ self.children[id_action].visit_count)
         #U_s_a = self.cput*np.sqrt(self.sum_visits)/(1+self.children[id_action].visit_count)    
-        #print('Sum visits',self.sum_visits)
+        
         return self.mean_action_value + U_s_a
         
     
@@ -102,8 +135,13 @@ class Node:
         '''
             Update the state of the tree after a simulation
         '''
+       
+        
         self.visit_count += 1
         self.tot_action_value += value*self.player_turn
+        
+       
+        
         self.mean_action_value = self.tot_action_value/self.visit_count
         return
 
@@ -117,11 +155,16 @@ def compute_pi_posterior(root_node,temperature):
     '''
     inv_temp = 1/temperature
     pi = torch.zeros(4672)
+    actions_list = root_node.env.legal_actions
+    for id_action in range(len(actions_list)):
+        pi[actions_list[id_action]] = root_node.children[id_action].visit_count#**inv_temp
+        pi[actions_list[id_action]]= pi[actions_list[id_action]]/(root_node.visit_count)#**inv_temp)
+        root_node.children[id_action].env.close()
+    #Reset and delete the children nodes
     
-    for id_action in range(len(root_node.actions_list)):
-        pi[root_node.actions_list[id_action]] = root_node.children[id_action].visit_count**inv_temp
-        pi[root_node.actions_list[id_action]]= pi[root_node.actions_list[id_action]]/(root_node.visit_count**inv_temp)
+    del root_node.children 
     return pi
+  
     
 def update_value(search_path,value):
     '''
@@ -133,43 +176,55 @@ def update_value(search_path,value):
         node.update_value(value)
     return
 
-def MCTS(root,num_simulations):
+
+def MCTS(root,num_simulations,actions_tracker):
     '''
     Perform a Monte Carlo Tree Search algorithm for the game of chess
     root: the root node of the tree
     num_simulations: the number of simulations to perform
+    actions_tracker: the list of actions that have been taken to reach the root node
     '''
+    root.action_tracker = actions_tracker
+    
+    #First Expansion
     root.expand()
-    print('Is leaf root',root.is_leaf)
+    
     for i in range(num_simulations):
-        #print('Simulation number',i)
+       
         node = root
         search_path = [node]
+        
         #Selection
         while(not node.is_leaf):
-            #print('Selection of child because node is not a leaf')
+            
             node = node.select_child()
             search_path.append(node)
+            
         #Expansion
+     
         if (node.visit_count==0):
-            #print('Unvisited node')
+           
             prior_prob,value = node.neural_network.forward(node.state) #rollout
-            #node.update_value(value) #Backpropagation
-            update_value(search_path,value)
+            
+            update_value(search_path,value)#Backpropagation
         else:
-            #print('Visited node')
+            
             node.expand()
+            
             #Simulation
             node = node.select_child()
+            
             search_path.append(node)
+    
             prior_prob,value = node.neural_network.forward(node.state) #rollout
-            #node.update_value(value) #Backpropagation
-            update_value(search_path,value)
-        #print('_________________________________________________________')
+           
+            update_value(search_path,value) #Backpropagation
+       
         
     temperature = 1
+    
     pi =compute_pi_posterior(root,temperature)   
-    return root,pi 
+    return pi 
 
 
 
@@ -188,7 +243,7 @@ if __name__ == '__main__':
     #print('legal actions ',len(env.legal_actions))
     
     root = Node(env_3,board,neural_network,1)
-    root_final,pi = MCTS(root,1000)
+    pi = MCTS(root,1000)
     #print("Pi: ",pi)
     #print('Pi shape: ',pi.shape)
     #print('Visit count: ',root_final.visit_count)
@@ -205,7 +260,7 @@ if __name__ == '__main__':
     print('Pi legal actions: ',pi_legal_actions)
     '''
     #Print the mean_action_value of the children nodes
-    
+    '''
     for id_action in range(len(root_final.actions_list)):
         print('Action: ',root_final.actions_list[id_action])
         print('Pi: ',id_action,':',pi[root_final.actions_list[id_action]])
@@ -221,3 +276,4 @@ if __name__ == '__main__':
         print('-------------------------')
     
     print('Visit count: ',root_final.visit_count)
+    '''
