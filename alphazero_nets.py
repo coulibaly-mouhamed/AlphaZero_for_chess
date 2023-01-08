@@ -18,13 +18,13 @@ class ConvBlock(nn.Module):
     def __init__(self):
         super(ConvBlock, self).__init__()
         self.action_size = 8*8*73
-        self.conv1 = nn.Conv2d(21, 256, 3, stride=1, padding=1) #change 22 par 21
+        self.conv1 = nn.Conv2d(20, 256, 3, stride=1, padding=1) #change 22 par 21
         self.bn1 = nn.BatchNorm2d(256)
 
     def forward(self, s):
         # Convert to tensor
         s = torch.tensor(s, dtype=torch.float32) 
-        s = s.view(-1, 21,8,8)  # batch_size x channels x board_x x board_y
+        s = s.view(-1, 20,8,8)  # batch_size x channels x board_x x board_y
         s = F.relu(self.bn1(self.conv1(s)))
         return s
 
