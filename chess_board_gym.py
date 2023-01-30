@@ -10,12 +10,22 @@ def naive_game():
 
     #clone_game = state.clone()
     counter = 0
+    obs = state.observation_tensor()
+    print('Observation Tensor shape : ',np.shape(obs))
+    #converting to numpy array
+    obs_np = np.array(obs)
+    #Reshape obs to 8*8*20
+    obs_np = obs_np.reshape(8,8,20)
+    print('Observation Tensor shape after reshape : ',np.shape(obs_np))
+    
+    '''
     while not state.is_terminal():
         obs = state.observation_tensor()
         legal_actions = state.legal_actions()
         action = random.choice(legal_actions)
         state.apply_action(action)
         counter += 1
+    '''
         #if counter ==5:
          #   clone_game = state.clone()
         #print('Current player: ',state.current_player())
@@ -31,9 +41,9 @@ def naive_game():
     #print(obs_tensor)
     #print('Clone game: ',clone_game.legal_actions())
     
-    print(dir(state))
+    #print(dir(state))
     #print(state.player_reward(1))
-    print(state.returns())
+    #print(state.returns())
     '''
     print("Informartion Tensor")
     print(dir(state.information_state_tensor))

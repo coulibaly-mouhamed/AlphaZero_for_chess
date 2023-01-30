@@ -1,8 +1,9 @@
 '''
 Implement a Monte Carlo Tree Search algorithm for the game of chess.
 '''
-from os import cpu_count
+
 from node_class import *
+
 
 
 def compute_pi_posterior(root_node,temperature):
@@ -65,7 +66,11 @@ def MCTS(root,num_simulations):
      
         if (current.visit_count==0):
             if (not current.state.is_terminal()):
-                prior_prob,value = current.neural_network.forward(current.obs) #rollout
+                obs_tensor = np.array(current.obs)
+                obs_tensor = obs_tensor.reshape(-1,20,8,8)
+                obs_tensor = torch.from_numpy(obs_tensor)
+                obs_tensor = obs_tensor.float()
+                prior_prob,value = current.neural_network.forward(obs_tensor) #rollout
                 #Convert value to numpy float
                 value = value.detach().numpy()[0][0]
                 if (current.player_turn== root.player_turn):    #Backpropagation
@@ -95,7 +100,11 @@ def MCTS(root,num_simulations):
                 search_path.append(current)
                 
                 if (not current.state.is_terminal()):
-                    prior_prob,value = current.neural_network.forward(current.obs) #rollout
+                    obs_tensor = np.array(current.obs)
+                    obs_tensor = obs_tensor.reshape(-1,20,8,8)
+                    obs_tensor = torch.from_numpy(obs_tensor)
+                    obs_tensor = obs_tensor.float()
+                    prior_prob,value = current.neural_network.forward(obs_tensor) #rollout
                     value = value.detach().numpy()[0][0]
                     if (current.player_turn== root.player_turn):    #Backpropagation
                         update_path(search_path,value)

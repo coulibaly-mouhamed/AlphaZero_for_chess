@@ -1,7 +1,10 @@
-from alphazero_nets import *
+
 import random 
 import pyspiel
 import numpy as np
+from random import sample
+import torch
+from torch import nn
 
 
 
@@ -55,7 +58,11 @@ class Node:
             raise Exception('Cannot expand a terminal node!!!')
         
         #Compute the prior probability of the children nodes
-        prior_probability_child = self.neural_network.forward(self.obs)[0]
+        obs_tensor = np.array(self.obs)
+        obs_tensor = obs_tensor.reshape(-1,20,8,8)
+        obs_tensor = torch.from_numpy(obs_tensor)
+        obs_tensor = obs_tensor.float()
+        prior_probability_child = self.neural_network.forward(obs_tensor)[0]
         prior_probability_child = prior_probability_child.flatten().detach().numpy() #convert to numpy array
         
         #Get the legal actions of the node
@@ -185,17 +192,3 @@ def update_path(path,value):
 
 
 
-
-
-
-
-
-def test_node_functions():
-    '''
-        Test the functions of the node class
-    '''
-    neural_network = Alphazero_net()
-    game = pyspiel.load_game("chess")
-    state = game.new_initial_state()
-    obs_root = state.observation_tensor()
-    root = Node(state,obs_root,neural_network)

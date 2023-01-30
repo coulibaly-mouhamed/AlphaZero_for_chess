@@ -66,7 +66,7 @@ def play_mcts_guided_game(neural_network,n_simu,num_game):
         pi = MCTS(root,n_simu)
         #print('End MCTS')
         
-        pi_history.append(pi)
+        pi_history.append(pi.detach().numpy())
         #Select the action
         '''
         if  (pi.sum() != 1):
@@ -111,21 +111,25 @@ def play_mcts_guided_game(neural_network,n_simu,num_game):
      #Convert the state history to numpy array
     state_history_np = np.array(state_history)
      #Convert the pi history to numpy array
+    
     pi_history_np = np.array(pi_history)
     #Save the state history and the pi history
     np.save('state_history'+str(num_game)+'.npy',state_history_np)
+    #print(pi_history_np.shape)
     np.save('pi_history'+str(num_game)+'.npy',pi_history_np)
     np.save('reward'+str(num_game)+'.npy',reward)
     
     os.chdir(directory)
-    
+
+    print('Game number ',num_game,' is over')
+    print('Reward = ',reward)
     return #state_history,pi_history,reward
         
 if __name__ == '__main__':
     neural_network = Alphazero_net()
-    for game in range (10):
+    for game in range (1):
         print('Game number: ',game)
-        play_mcts_guided_game(neural_network,5,game)
+        play_mcts_guided_game(neural_network,3,game)
         print('-------------------------------------------------------------------')
     #print('Reward: ',reward)
     print('End of the games')
